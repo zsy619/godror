@@ -55,7 +55,6 @@ type NullTime = sql.NullTime
 var nullTime interface{} = nil
 
 type stmtOptions struct {
-	boolString         boolString
 	fetchArraySize     int // zero means DefaultFetchArraySize
 	prefetchCount      int // zero means DefaultPrefetchCount, -1 is zero.
 	arraySize          int
@@ -70,29 +69,16 @@ type stmtOptions struct {
 	partialBatch       bool
 }
 
-type boolString struct {
-	True, False string
-}
-
-func (bs boolString) IsZero() bool { return bs.True == "" && bs.False == "" }
-func (bs boolString) MaxLen() int {
-	n := len(bs.True)
-	if m := len(bs.False); m > n {
-		return m
-	}
-	return n
-}
-func (bs boolString) ToString(b bool) string {
+func BoolToString(b bool) string {
 	if b {
-		return bs.True
+		return "true"
 	}
-	return bs.False
-}
-func (bs boolString) FromString(s string) bool {
-	return s == bs.True && bs.True != "" || bs.True == "" && s != bs.False
+	return "false"
 }
 
-func (o stmtOptions) BoolString() boolString { return o.boolString }
+func BoolFromString(s string) bool {
+	return s == "true"
+}
 
 func (o stmtOptions) ExecMode() C.dpiExecMode {
 	if o.execMode == 0 {
@@ -145,30 +131,6 @@ func (o stmtOptions) PartialBatch() bool    { return o.partialBatch }
 //
 // Use it "naked", without sql.Named!
 type Option func(*stmtOptions)
-
-// BoolToString is an option that governs convertsion from bool to string in the database.
-// This is for converting from bool to string, from outside of the database
-// (which does not have a BOOL(EAN) column (SQL) type, only a BOOLEAN PL/SQL type).
-//
-// This will be used only with DML statements and when the PlSQLArrays Option is not used.
-//
-// For the other way around, use an sql.Scanner that converts from string to bool. For example:
-//
-//	type Booler bool
-//	var _ sql.Scanner = Booler{}
-//	func (b Booler) Scan(src interface{}) error {
-//	  switch src := src.(type) {
-//	    case int: *b = x == 1
-//	    case string: *b = x == "Y" || x == "T"  // or any string your database model treats as truth value
-//	    default: return fmt.Errorf("unknown scanner source %T", src)
-//	  }
-//	  return nil
-//	}
-//
-// Such a type cannot be included in this package till we can inject the truth strings into the scanner method.
-func BoolToString(trueVal, falseVal string) Option {
-	return func(o *stmtOptions) { o.boolString = boolString{True: trueVal, False: falseVal} }
-}
 
 // PlSQLArrays is to signal that the slices given in arguments of Exec to
 // be left as is - the default is to treat them as arguments for ExecMany.
@@ -1202,7 +1164,7 @@ func (st *statement) bindVarTypeSwitch(ctx context.Context, info *argInfo, get *
 			*get = dataGetNumber
 		}
 	case bool, []bool:
-		if st.dpiStmtInfo.isPLSQL == 1 || st.stmtOptions.boolString.IsZero() || st.PlSQLArrays() {
+		if st.dpiStmtInfo.isPLSQL == 1 || st.PlSQLArrays() {
 			info.typ, info.natTyp = C.DPI_ORACLE_TYPE_BOOLEAN, C.DPI_NATIVE_TYPE_BOOLEAN
 			info.set = dataSetBool
 			if info.isOut {
@@ -1210,7 +1172,7 @@ func (st *statement) bindVarTypeSwitch(ctx context.Context, info *argInfo, get *
 			}
 		} else {
 			info.typ, info.natTyp = C.DPI_ORACLE_TYPE_VARCHAR, C.DPI_NATIVE_TYPE_BYTES
-			info.bufSize = st.stmtOptions.boolString.MaxLen()
+			info.bufSize = 5
 			info.set = st.dataSetBoolBytes
 			if info.isOut {
 				*get = st.dataGetBoolBytes
@@ -2492,7 +2454,7 @@ func (st *statement) dataGetBoolBytes(ctx context.Context, v interface{}, data [
 			*x = false
 			return nil
 		}
-		*x = st.stmtOptions.boolString.FromString(string(dpiData_getBytes(&data[0])))
+		*x = BoolFromString(string(dpiData_getBytes(&data[0])))
 
 	case *[]bool:
 		*x = (*x)[:0]
@@ -2501,7 +2463,7 @@ func (st *statement) dataGetBoolBytes(ctx context.Context, v interface{}, data [
 				*x = append(*x, false)
 				continue
 			}
-			*x = append(*x, st.stmtOptions.boolString.FromString(string(dpiData_getBytes(&data[i]))))
+			*x = append(*x, BoolFromString(string(dpiData_getBytes(&data[i]))))
 		}
 
 	case *interface{}:
@@ -2536,13 +2498,13 @@ func (st *statement) dataSetBoolBytes(ctx context.Context, dv *C.dpiVar, data []
 	case bool:
 		i, x := 0, slice
 		data[i].isNull = 0
-		s := []byte(st.stmtOptions.boolString.ToString(x))
+		s := []byte(BoolToString(x))
 		p = (*C.char)(unsafe.Pointer(&s[0]))
 		C.dpiVar_setFromBytes(dv, C.uint32_t(i), p, C.uint32_t(len(s)))
 	case []bool:
 		for i, x := range slice {
 			data[i].isNull = 0
-			s := []byte(st.stmtOptions.boolString.ToString(x))
+			s := []byte(BoolToString(x))
 			p = (*C.char)(unsafe.Pointer(&s[0]))
 			C.dpiVar_setFromBytes(dv, C.uint32_t(i), p, C.uint32_t(len(s)))
 		}

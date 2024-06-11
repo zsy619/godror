@@ -3723,11 +3723,10 @@ func TestBool(t *testing.T) {
 	if _, err := testDb.ExecContext(ctx, qry, booler(true)); err != nil {
 		t.Fatal(fmt.Errorf("%s: %w", qry, err))
 	}
-	b2s := godror.BoolToString("t", "f")
-	if _, err := testDb.ExecContext(ctx, qry, true, b2s); err != nil {
+	if _, err := testDb.ExecContext(ctx, qry, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDb.ExecContext(ctx, qry, false, b2s); err != nil {
+	if _, err := testDb.ExecContext(ctx, qry, false); err != nil {
 		t.Fatal(err)
 	}
 
