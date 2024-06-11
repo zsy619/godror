@@ -1,0 +1,8 @@
+version: "3.1"
+
+services:
+  devcontainer:
+    image: ghcr.io/moveaxlab/godror-devcontainer:latest
+    volumes:
+      - .:/workspaces/godror:cached
+    command: sleep infinity
