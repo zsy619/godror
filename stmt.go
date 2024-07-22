@@ -69,17 +69,6 @@ type stmtOptions struct {
 	partialBatch       bool
 }
 
-func BoolToString(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
-func BoolFromString(s string) bool {
-	return s == "true"
-}
-
 func (o stmtOptions) ExecMode() C.dpiExecMode {
 	if o.execMode == 0 {
 		return C.DPI_MODE_EXEC_DEFAULT
@@ -2454,7 +2443,11 @@ func (st *statement) dataGetBoolBytes(ctx context.Context, v interface{}, data [
 			*x = false
 			return nil
 		}
-		*x = BoolFromString(string(dpiData_getBytes(&data[0])))
+		var err error
+		*x, err = strconv.ParseBool(string(dpiData_getBytes(&data[0])))
+		if err != nil {
+			return err
+		}
 
 	case *[]bool:
 		*x = (*x)[:0]
@@ -2463,7 +2456,11 @@ func (st *statement) dataGetBoolBytes(ctx context.Context, v interface{}, data [
 				*x = append(*x, false)
 				continue
 			}
-			*x = append(*x, BoolFromString(string(dpiData_getBytes(&data[i]))))
+			val, err := strconv.ParseBool(string(dpiData_getBytes(&data[i])))
+			if err != nil {
+				return err
+			}
+			*x = append(*x, val)
 		}
 
 	case *interface{}:
@@ -2498,13 +2495,13 @@ func (st *statement) dataSetBoolBytes(ctx context.Context, dv *C.dpiVar, data []
 	case bool:
 		i, x := 0, slice
 		data[i].isNull = 0
-		s := []byte(BoolToString(x))
+		s := []byte(strconv.FormatBool(x))
 		p = (*C.char)(unsafe.Pointer(&s[0]))
 		C.dpiVar_setFromBytes(dv, C.uint32_t(i), p, C.uint32_t(len(s)))
 	case []bool:
 		for i, x := range slice {
 			data[i].isNull = 0
-			s := []byte(BoolToString(x))
+			s := []byte(strconv.FormatBool(x))
 			p = (*C.char)(unsafe.Pointer(&s[0]))
 			C.dpiVar_setFromBytes(dv, C.uint32_t(i), p, C.uint32_t(len(s)))
 		}
